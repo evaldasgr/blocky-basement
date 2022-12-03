@@ -1,26 +1,25 @@
-#include <cmath>
+#include <GL/glew.h>
+#include <glm/ext.hpp>
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp>
 
-// Sets up the 3D perspective
-void resetPerspective(unsigned windowWidth, unsigned windowHeight);
-
-// Converts from degrees to radians
-// Radians are typically used for calculations
-float degToRad(float deg);
-
-// Converts from radians to degrees
-// Degrees are easier to read and also used for setting angles in OpenGL
-float radToDeg(float rad);
+void prepObjects(unsigned& vbo, unsigned& vao);
+unsigned prepVertShader();
+unsigned prepFragShader();
+unsigned prepShaderProgram();
 
 int main()
 {
     // Create the window
-    // 24 is a standard depth buffer bit depth (accuracy)
-    // The depth buffer is required for not drawing things that are behind other
-    // things
-    sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0});
+    sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0, 3, 2, sf::ContextSettings::Core});
     window.setFramerateLimit(60);
+
+    // GLEW allows accessing Modern OpenGL functions
+    glewInit();
+
+    // Enable depth testing and face culling
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
 
     // Player variables
     sf::Vector3f cameraPosition = {0.f, 0.5f, 0.f};
@@ -47,19 +46,20 @@ int main()
         }
     }
 
-    // Enables the use of the depth buffer to prevent drawing of things that are
-    // behind other things
-    glEnable(GL_DEPTH_TEST);
-
-    // Disables drawing of internal faces, as they're always invisible unless
-    // you're clipping into something
-    glEnable(GL_CULL_FACE);
-
     // Set the window area in which OpenGL will draw
     glViewport(0, 0, window.getSize().x, window.getSize().y);
 
-    // Set up the 3D perspective
-    resetPerspective(window.getSize().x, window.getSize().y);
+    // Prepare shaders used for drawing
+    unsigned shaderProgram = prepShaderProgram();
+    glUseProgram(shaderProgram);
+
+    // Prepare objects used for drawing
+    unsigned vbo, vao;
+    prepObjects(vbo, vao);
+    glBindVertexArray(vao);
+
+    // Calculate the perspective matrix
+    glm::mat4 proj = glm::perspective(glm::radians(90.f), (float)window.getSize().x / (float)window.getSize().y, 0.1f, 100.f);
 
     // Main loop woo!
     while (window.isOpen())
@@ -102,7 +102,7 @@ int main()
             else if (event.type == sf::Event::Resized)
             {
                 glViewport(0, 0, window.getSize().x, window.getSize().y);
-                resetPerspective(window.getSize().x, window.getSize().y);
+                proj = glm::perspective(glm::radians(90.f), (float)window.getSize().x / (float)window.getSize().y, 0.1f, 100.f);
             }
         }
 
@@ -125,19 +125,8 @@ int main()
             cameraRotation += TurnSpeed;
 
         // Begin drawing
-        // To draw the model view matrix must be used
-        glMatrixMode(GL_MODELVIEW);
-
-        // Reset the matrix, otherwise any alterations from the last frame will
-        // remain and cause issues
-        glLoadIdentity();
-
         // Clear the screen and the depth buffer
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        // Offset The World by the camera's rotation and position
-        glRotatef(radToDeg(cameraRotation), 0.f, 1.f, 0.f);
-        glTranslatef(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z);
 
         // Draw every wall
         for (unsigned i = 0; i < image.getSize().y; i++)
@@ -148,40 +137,17 @@ int main()
                 if (image.getPixel(j, i) != sf::Color::White)
                     continue;
 
-                // glPushMatrix(); and glPopMatrix(); allow to place every wall
-                // to it's rightful place separately - without affecting the
-                // subsequent walls
-                glPushMatrix();
-                    // Set the wall position
-                    glTranslatef(j, 0.f, i);
+                // Transform the view matrix by the camera position, rotation
+                // and the wall position
+                glm::mat4 view = glm::mat4(1.f);
+                view = glm::rotate(view, cameraRotation, glm::vec3(0.f, 1.f, 0.f));
+                view = glm::translate(view, glm::vec3(-cameraPosition.x, -cameraPosition.y, -cameraPosition.z));
+                view = glm::translate(view, glm::vec3(j, 0.f, i));
 
-                    // Set the color and positions of every corner of the wall
-                    glBegin(GL_QUADS);
-                        // Front wall
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(0.f, 0.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(1.f, 0.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(1.f, 1.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(0.f, 1.f, 1.f);
-
-                        // Back wall
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(1.f, 1.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(1.f, 0.f, 0.f);
-
-                        // Left wall
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 0.f, 0.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 1.f, 0.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 1.f, 1.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 0.f, 1.f);
-
-                        // Right wall
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 0.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 1.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 1.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 0.f);
-                    glEnd();
-                glPopMatrix();
+                // Pass the view and projection matrices and draw the wall
+                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "view"), 1, GL_FALSE, glm::value_ptr(view));
+                glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "proj"), 1, GL_FALSE, glm::value_ptr(proj));
+                glDrawArrays(GL_TRIANGLES, 0, 6 * 4);
             }
         }
 
@@ -192,48 +158,129 @@ int main()
     return 0;
 }
 
-void resetPerspective(unsigned windowWidth, unsigned windowHeight)
+void prepObjects(unsigned& vbo, unsigned& vao)
 {
-    // How close and far from the camera to draw
-    //
-    // zFar should be as near as possible for performance reasons as well as
-    // accuracy of depth calculations, but having it too close will cut off
-    // distant things
-    //
-    // zNear can't be 0 because math, but having it too large will cut off
-    // things right in front of the camera
-    static constexpr float zFar = 100.f;
-    static constexpr float zNear = 0.1f;
+    // Array containing all colors and vertices of a wall
+    // Format: R G B X Y Z
+    static const float WallData[] = {
+        // Front wall
+        1.f, 0.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 1.f, 1.f,
 
-    // Camera field of view
-    // Can be any value between 0 and 180 degrees
-    const float fov = degToRad(90.f);
+        1.f, 0.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 1.f, 1.f,
+        1.f, 0.f, 0.f, 0.f, 1.f, 1.f,
 
-    // Magic lol
-    const float ratio = (float)windowWidth / (float)windowHeight;
+        // Back wall
+        0.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f, 1.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 1.f, 0.f,
 
-    const float f = 1.f / std::tan(fov / 2.f);
-    const float a = f / ratio;
-    const float c = (zFar + zNear) / (zNear - zFar);
-    const float d = (2.f * zFar * zNear) / (zNear - zFar);
-    const float matrix[] = {
-        a, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, c, -1,
-        0, 0, d, 0
+        0.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 1.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 0.f, 0.f,
+
+        // Left wall
+        0.f, 0.f, 1.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 1.f,
+
+        0.f, 0.f, 1.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 1.f,
+        0.f, 0.f, 1.f, 1.f, 0.f, 1.f,
+
+        // Right wall
+        1.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        1.f, 1.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 1.f,
+
+        1.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 1.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 0.f
     };
 
-    // Switch to the projection matrix and load it with the calculated values
-    glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(matrix);
+    // Create the vertex buffer object
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(WallData), WallData, GL_STATIC_DRAW);
+
+    // Create the vertex array object
+    glGenVertexArrays(1, &vao);
+
+    // Specify the VBO
+    glBindVertexArray(vao);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+
+    // Specify the data layout
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 }
 
-float degToRad(float deg)
+unsigned prepVertShader()
 {
-    return deg * M_PI / 180.f;
+    static const char* Src =
+    "#version 150 core\n"
+    "\n"
+    "in vec3 color;\n"
+    "in vec3 pos;\n"
+    "\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 proj;\n"
+    "\n"
+    "out vec3 passedColor;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    gl_Position = proj * view * vec4(pos.x, pos.y, pos.z, 1.0);\n"
+    "    passedColor = color;\n"
+    "}\n";
+
+    unsigned shader = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(shader, 1, &Src, nullptr);
+    glCompileShader(shader);
+
+    return shader;
 }
 
-float radToDeg(float rad)
+unsigned prepFragShader()
 {
-    return rad * 180.f / M_PI;
+    static const char* Src =
+    "#version 150 core\n"
+    "\n"
+    "in vec3 passedColor;\n"
+    "out vec4 color;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    color = vec4(passedColor.x, passedColor.y, passedColor.z, 1.0);\n"
+    "}\n";
+
+    unsigned shader = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(shader, 1, &Src, nullptr);
+    glCompileShader(shader);
+
+    return shader;
+}
+
+unsigned prepShaderProgram()
+{
+    // Prepare the vertex and fragment shaders
+    unsigned vertShader = prepVertShader();
+    unsigned fragShader = prepFragShader();
+
+    // Prepare the shader program
+    unsigned shaderProgram = glCreateProgram();
+    glAttachShader(shaderProgram, vertShader);
+    glAttachShader(shaderProgram, fragShader);
+    glLinkProgram(shaderProgram);
+
+    // Separate shaders are no longer used and can be deleted
+    glDeleteShader(vertShader);
+    glDeleteShader(fragShader);
+
+    return shaderProgram;
 }
