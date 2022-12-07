@@ -107,22 +107,64 @@ int main()
         }
 
         // Player movement and rotation
+        sf::Vector3f newPosition = cameraPosition;
+
         static constexpr float MovementSpeed = 0.03f;
         static constexpr float TurnSpeed = 0.03f;
         if (movingForw)
         {
-            cameraPosition.x += std::sin(cameraRotation) * MovementSpeed;
-            cameraPosition.z -= std::cos(cameraRotation) * MovementSpeed;
+            newPosition.x += std::sin(cameraRotation) * MovementSpeed;
+            newPosition.z -= std::cos(cameraRotation) * MovementSpeed;
         }
         if (movingBack)
         {
-            cameraPosition.x -= std::sin(cameraRotation) * MovementSpeed;
-            cameraPosition.z += std::cos(cameraRotation) * MovementSpeed;
+            newPosition.x -= std::sin(cameraRotation) * MovementSpeed;
+            newPosition.z += std::cos(cameraRotation) * MovementSpeed;
         }
         if (movingLeft)
             cameraRotation -= TurnSpeed;
         if (movingRight)
             cameraRotation += TurnSpeed;
+
+        // Collision handling
+        // Player radius prevents the camera from getting too close to a wall
+        // Should not be greater than 0.5 (half wall size), as there is no
+        // support for collisions with 3 walls at the same time
+        static constexpr float PlayerRadius = 0.3f;
+
+        // Margin is used to push the player away from a wall and prevent the
+        // collision from persisting due to rounding or floating point error
+        static constexpr float Margin = 0.01f;
+
+        // First handle motion and collision in the X axis
+        if (newPosition.x < cameraPosition.x)
+        {
+            if (image.getPixel(newPosition.x - PlayerRadius, cameraPosition.z - PlayerRadius) == sf::Color::White ||
+                image.getPixel(newPosition.x - PlayerRadius, cameraPosition.z + PlayerRadius) == sf::Color::White)
+                newPosition.x = std::ceil(newPosition.x - PlayerRadius) + PlayerRadius + Margin;
+        }
+        else if (newPosition.x > cameraPosition.x)
+        {
+            if (image.getPixel(newPosition.x + PlayerRadius, cameraPosition.z - PlayerRadius) == sf::Color::White ||
+                image.getPixel(newPosition.x + PlayerRadius, cameraPosition.z + PlayerRadius) == sf::Color::White)
+                newPosition.x = std::floor(newPosition.x + PlayerRadius) - PlayerRadius - Margin;
+        }
+
+        // Next handle motion and collision in the Z axis
+        if (newPosition.z < cameraPosition.z)
+        {
+            if (image.getPixel(newPosition.x - PlayerRadius, newPosition.z - PlayerRadius) == sf::Color::White ||
+                image.getPixel(newPosition.x + PlayerRadius, newPosition.z - PlayerRadius) == sf::Color::White)
+                newPosition.z = std::ceil(newPosition.z - PlayerRadius) + PlayerRadius + Margin;
+        }
+        else if (newPosition.z > cameraPosition.z)
+        {
+            if (image.getPixel(newPosition.x - PlayerRadius, newPosition.z + PlayerRadius) == sf::Color::White ||
+                image.getPixel(newPosition.x + PlayerRadius, newPosition.z + PlayerRadius) == sf::Color::White)
+                newPosition.z = std::floor(newPosition.z + PlayerRadius) - PlayerRadius - Margin;
+        }
+
+        cameraPosition = newPosition;
 
         // Begin drawing
         // Clear the screen and the depth buffer
