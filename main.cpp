@@ -11,8 +11,7 @@ unsigned prepShaderProgram();
 int main()
 {
     // Create the window
-    sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0, 3, 2, sf::ContextSettings::Core});
-    window.setFramerateLimit(60);
+    sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0, 3, 2});
 
     // GLEW allows accessing Modern OpenGL functions
     glewInit();
@@ -46,12 +45,21 @@ int main()
         }
     }
 
+    // Create an SFML font and text for drawing the FPS counter
+    sf::Font font;
+    font.loadFromFile("Tuffy.ttf");
+    sf::Text text;
+    text.setFont(font);
+
+    // Variables used for counting FPS
+    sf::Clock clock;
+    unsigned frames = 0;
+
     // Set the window area in which OpenGL will draw
     glViewport(0, 0, window.getSize().x, window.getSize().y);
 
     // Prepare shaders used for drawing
     unsigned shaderProgram = prepShaderProgram();
-    glUseProgram(shaderProgram);
 
     // Prepare objects used for drawing
     unsigned vbo, vao;
@@ -171,6 +179,8 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         // Draw every wall
+        glBindVertexArray(vao);
+        glUseProgram(shaderProgram);
         for (unsigned i = 0; i < image.getSize().y; i++)
         {
             for (unsigned j = 0; j < image.getSize().x; j++)
@@ -193,8 +203,24 @@ int main()
             }
         }
 
+        // Draw SFML stuff
+        glBindVertexArray(0);
+        glUseProgram(0);
+        window.pushGLStates();
+            window.draw(text);
+        window.popGLStates();
+
         // Make the GPU actually render everything
         window.display();
+
+        // Update the FPS counter
+        frames++;
+        if (clock.getElapsedTime().asMilliseconds() >= 1000)
+        {
+            text.setString("OpenGL Modern / " + std::to_string(frames) + "FPS");
+            frames = 0;
+            clock.restart();
+        }
     }
 
     return 0;
@@ -252,7 +278,6 @@ void prepObjects(unsigned& vbo, unsigned& vao)
 
     // Specify the VBO
     glBindVertexArray(vao);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
     // Specify the data layout
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
