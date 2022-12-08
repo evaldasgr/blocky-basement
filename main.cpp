@@ -1,16 +1,11 @@
+#include <GL/glew.h>
 #include <cmath>
 #include <SFML/Graphics.hpp>
 #include <SFML/OpenGL.hpp>
 
-// Sets up the 3D perspective
+void prepVbo(unsigned& vbo);
 void resetPerspective(unsigned windowWidth, unsigned windowHeight);
-
-// Converts from degrees to radians
-// Radians are typically used for calculations
 float degToRad(float deg);
-
-// Converts from radians to degrees
-// Degrees are easier to read and also used for setting angles in OpenGL
 float radToDeg(float rad);
 
 int main()
@@ -20,7 +15,10 @@ int main()
     // The depth buffer is required for not drawing things that are behind other
     // things
     sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0});
-    window.setFramerateLimit(60);
+    //window.setVerticalSyncEnabled(true);
+
+    // GLEW allows accessing Modern OpenGL functions
+    glewInit();
 
     // Player variables
     sf::Vector3f cameraPosition = {0.f, 0.5f, 0.f};
@@ -47,6 +45,20 @@ int main()
         }
     }
 
+    // Create an SFML font and text for drawing the FPS counter
+    sf::Font font;
+    font.loadFromFile("Tuffy.ttf");
+    sf::Text text;
+    text.setFont(font);
+
+    // Variables used for counting FPS
+    sf::Clock fpsClock;
+    unsigned frames = 0;
+
+    // Prepare objects used for drawing
+    unsigned vbo;
+    prepVbo(vbo);
+
     // Enables the use of the depth buffer to prevent drawing of things that are
     // behind other things
     glEnable(GL_DEPTH_TEST);
@@ -55,6 +67,10 @@ int main()
     // you're clipping into something
     glEnable(GL_CULL_FACE);
 
+    // Enable drawing from specified color and vertex array pointers
+    glEnableClientState(GL_COLOR_ARRAY);
+    glEnableClientState(GL_VERTEX_ARRAY);
+
     // Set the window area in which OpenGL will draw
     glViewport(0, 0, window.getSize().x, window.getSize().y);
 
@@ -62,8 +78,11 @@ int main()
     resetPerspective(window.getSize().x, window.getSize().y);
 
     // Main loop woo!
+    sf::Clock frameClock;
     while (window.isOpen())
     {
+        const float dt = frameClock.restart().asSeconds();
+
         // Handle input and other events
         sf::Event event;
         while (window.pollEvent(event))
@@ -107,22 +126,22 @@ int main()
         }
 
         // Player movement and rotation
-        static constexpr float MovementSpeed = 0.03f;
-        static constexpr float TurnSpeed = 0.03f;
+        static constexpr float MovementSpeed = 1.8f;
+        static constexpr float TurnSpeed = 1.8f;
         if (movingForw)
         {
-            cameraPosition.x += std::sin(cameraRotation) * MovementSpeed;
-            cameraPosition.z -= std::cos(cameraRotation) * MovementSpeed;
+            cameraPosition.x += std::sin(cameraRotation) * MovementSpeed * dt;
+            cameraPosition.z -= std::cos(cameraRotation) * MovementSpeed * dt;
         }
         if (movingBack)
         {
-            cameraPosition.x -= std::sin(cameraRotation) * MovementSpeed;
-            cameraPosition.z += std::cos(cameraRotation) * MovementSpeed;
+            cameraPosition.x -= std::sin(cameraRotation) * MovementSpeed * dt;
+            cameraPosition.z += std::cos(cameraRotation) * MovementSpeed * dt;
         }
         if (movingLeft)
-            cameraRotation -= TurnSpeed;
+            cameraRotation -= TurnSpeed * dt;
         if (movingRight)
-            cameraRotation += TurnSpeed;
+            cameraRotation += TurnSpeed * dt;
 
         // Begin drawing
         // To draw the model view matrix must be used
@@ -155,41 +174,82 @@ int main()
                     // Set the wall position
                     glTranslatef(j, 0.f, i);
 
-                    // Set the color and positions of every corner of the wall
-                    glBegin(GL_QUADS);
-                        // Front wall
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(0.f, 0.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(1.f, 0.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(1.f, 1.f, 1.f);
-                        glColor3f(1.f, 0.f, 0.f); glVertex3f(0.f, 1.f, 1.f);
-
-                        // Back wall
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(1.f, 1.f, 0.f);
-                        glColor3f(0.f, 1.f, 0.f); glVertex3f(1.f, 0.f, 0.f);
-
-                        // Left wall
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 0.f, 0.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 1.f, 0.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 1.f, 1.f);
-                        glColor3f(0.f, 0.f, 1.f); glVertex3f(1.f, 0.f, 1.f);
-
-                        // Right wall
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 0.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 0.f, 1.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 1.f);
-                        glColor3f(1.f, 1.f, 0.f); glVertex3f(0.f, 1.f, 0.f);
-                    glEnd();
+                    // Draw the wall
+                    glDrawArrays(GL_TRIANGLES, 0, 6 * 4);
                 glPopMatrix();
             }
         }
 
+        // Draw SFML stuff
+        window.pushGLStates();
+            window.draw(text);
+        window.popGLStates();
+
         // Make the GPU actually render everything
         window.display();
+
+        frames++;
+        if (fpsClock.getElapsedTime().asMilliseconds() >= 1000)
+        {
+            text.setString("OpenGL Legacy / " + std::to_string(frames) + "FPS");
+            frames = 0;
+            fpsClock.restart();
+        }
     }
 
     return 0;
+}
+
+void prepVbo(unsigned& vbo)
+{
+    // Array containing all colors and vertices of a wall
+    // Format: R G B X Y Z
+    static const float WallData[] = {
+        // Front wall
+        1.f, 0.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 1.f, 1.f,
+
+        1.f, 0.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 0.f, 0.f, 1.f, 1.f, 1.f,
+        1.f, 0.f, 0.f, 0.f, 1.f, 1.f,
+
+        // Back wall
+        0.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 0.f, 1.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 1.f, 0.f,
+
+        0.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 1.f, 0.f,
+        0.f, 1.f, 0.f, 1.f, 0.f, 0.f,
+
+        // Left wall
+        0.f, 0.f, 1.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 1.f,
+
+        0.f, 0.f, 1.f, 1.f, 0.f, 0.f,
+        0.f, 0.f, 1.f, 1.f, 1.f, 1.f,
+        0.f, 0.f, 1.f, 1.f, 0.f, 1.f,
+
+        // Right wall
+        1.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        1.f, 1.f, 0.f, 0.f, 0.f, 1.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 1.f,
+
+        1.f, 1.f, 0.f, 0.f, 0.f, 0.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 1.f,
+        1.f, 1.f, 0.f, 0.f, 1.f, 0.f
+    };
+
+    // Create the vertex buffer object
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(WallData), WallData, GL_STATIC_DRAW);
+
+    // Specify the color and vertex array pointers
+    glColorPointer(3, GL_FLOAT, 6 * sizeof(float), (void*)0);
+    glVertexPointer(3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
 }
 
 void resetPerspective(unsigned windowWidth, unsigned windowHeight)
