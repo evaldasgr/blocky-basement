@@ -37,6 +37,7 @@
 			<Add library="sfml-system" />
 			<Add library="GL" />
 			<Add library="GLEW" />
+			<Add library="GLU" />
 		</Linker>
 		<Unit filename="main.cpp" />
 		<Extensions />

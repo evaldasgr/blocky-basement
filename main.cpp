@@ -262,30 +262,20 @@ void resetPerspective(unsigned windowWidth, unsigned windowHeight)
     //
     // zNear can't be 0 because math, but having it too large will cut off
     // things right in front of the camera
-    static constexpr float zFar = 100.f;
-    static constexpr float zNear = 0.1f;
+    static constexpr float ZFar = 100.f;
+    static constexpr float ZNear = 0.1f;
 
     // Camera field of view
     // Can be any value between 0 and 180 degrees
-    const float fov = degToRad(90.f);
+    static constexpr float Fov = 90.f;
 
-    // Magic lol
+    // Window aspect ratio
     const float ratio = (float)windowWidth / (float)windowHeight;
 
-    const float f = 1.f / std::tan(fov / 2.f);
-    const float a = f / ratio;
-    const float c = (zFar + zNear) / (zNear - zFar);
-    const float d = (2.f * zFar * zNear) / (zNear - zFar);
-    const float matrix[] = {
-        a, 0, 0, 0,
-        0, f, 0, 0,
-        0, 0, c, -1,
-        0, 0, d, 0
-    };
-
-    // Switch to the projection matrix and load it with the calculated values
+    // Switch to and calculate the projection matrix
     glMatrixMode(GL_PROJECTION);
-    glLoadMatrixf(matrix);
+    glLoadIdentity();
+    gluPerspective(Fov, ratio, ZNear, ZFar);
 }
 
 float degToRad(float deg)
