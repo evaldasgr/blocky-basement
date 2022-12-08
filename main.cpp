@@ -12,6 +12,7 @@ int main()
 {
     // Create the window
     sf::RenderWindow window({1280, 720}, "Blocky Basement", sf::Style::Default, sf::ContextSettings{24, 0, 0, 3, 2});
+    //window.setVerticalSyncEnabled(true);
 
     // GLEW allows accessing Modern OpenGL functions
     glewInit();
@@ -52,7 +53,7 @@ int main()
     text.setFont(font);
 
     // Variables used for counting FPS
-    sf::Clock clock;
+    sf::Clock fpsClock;
     unsigned frames = 0;
 
     // Set the window area in which OpenGL will draw
@@ -70,8 +71,11 @@ int main()
     glm::mat4 proj = glm::perspective(glm::radians(90.f), (float)window.getSize().x / (float)window.getSize().y, 0.1f, 100.f);
 
     // Main loop woo!
+    sf::Clock frameClock;
     while (window.isOpen())
     {
+        const float dt = frameClock.restart().asSeconds();
+
         // Handle input and other events
         sf::Event event;
         while (window.pollEvent(event))
@@ -117,22 +121,22 @@ int main()
         // Player movement and rotation
         sf::Vector3f newPosition = cameraPosition;
 
-        static constexpr float MovementSpeed = 0.03f;
-        static constexpr float TurnSpeed = 0.03f;
+        static constexpr float MovementSpeed = 1.8f;
+        static constexpr float TurnSpeed = 1.8f;
         if (movingForw)
         {
-            newPosition.x += std::sin(cameraRotation) * MovementSpeed;
-            newPosition.z -= std::cos(cameraRotation) * MovementSpeed;
+            newPosition.x += std::sin(cameraRotation) * MovementSpeed * dt;
+            newPosition.z -= std::cos(cameraRotation) * MovementSpeed * dt;
         }
         if (movingBack)
         {
-            newPosition.x -= std::sin(cameraRotation) * MovementSpeed;
-            newPosition.z += std::cos(cameraRotation) * MovementSpeed;
+            newPosition.x -= std::sin(cameraRotation) * MovementSpeed * dt;
+            newPosition.z += std::cos(cameraRotation) * MovementSpeed * dt;
         }
         if (movingLeft)
-            cameraRotation -= TurnSpeed;
+            cameraRotation -= TurnSpeed * dt;
         if (movingRight)
-            cameraRotation += TurnSpeed;
+            cameraRotation += TurnSpeed * dt;
 
         // Collision handling
         // Player radius prevents the camera from getting too close to a wall
@@ -215,11 +219,11 @@ int main()
 
         // Update the FPS counter
         frames++;
-        if (clock.getElapsedTime().asMilliseconds() >= 1000)
+        if (fpsClock.getElapsedTime().asMilliseconds() >= 1000)
         {
             text.setString("OpenGL Modern / " + std::to_string(frames) + "FPS");
             frames = 0;
-            clock.restart();
+            fpsClock.restart();
         }
     }
 
